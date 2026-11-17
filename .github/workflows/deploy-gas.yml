@@ -1,0 +1,54 @@
+# Setiap push yang mengubah folder gas/ -> kode otomatis dikirim ke Google Apps Script.
+# Tidak perlu copy-paste ke editor GAS.
+# Secrets yang dibutuhkan (Settings > Secrets and variables > Actions):
+#   CLASPRC_JSON   isi file ~/.clasprc.json hasil "clasp login" (sekali saja)
+#   SCRIPT_ID      Script ID dari Apps Script (Project Settings)
+#   DEPLOYMENT_ID  (opsional saat pertama) ID deployment web app; diisi setelah run pertama
+name: Deploy Apps Script
+
+on:
+  push:
+    branches: [main]
+    paths: ['gas/**', '.github/workflows/deploy-gas.yml']
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install clasp
+        run: npm install -g @google/clasp@2.4.2
+      - name: Login clasp
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          SCRIPT_ID: ${{ secrets.SCRIPT_ID }}
+        run: |
+          if [ -z "$CLASPRC_JSON" ]; then echo "::error::Secret CLASPRC_JSON belum diisi (lihat README langkah 2)"; exit 1; fi
+          if [ -z "$SCRIPT_ID" ]; then echo "::error::Secret SCRIPT_ID belum diisi (lihat README langkah 3)"; exit 1; fi
+          echo "$CLASPRC_JSON" > ~/.clasprc.json
+          printf '{"scriptId":"%s","rootDir":"gas"}' "$SCRIPT_ID" > .clasp.json
+      - name: Push kode ke Apps Script
+        run: clasp push --force
+      - name: Deploy web app
+        env:
+          DEPLOYMENT_ID: ${{ secrets.DEPLOYMENT_ID }}
+        run: |
+          if [ -n "$DEPLOYMENT_ID" ]; then
+            clasp deploy -i "$DEPLOYMENT_ID" -d "push ${GITHUB_SHA::7}"
+            ID="$DEPLOYMENT_ID"
+          else
+            OUT=$(clasp deploy -d "deploy pertama")
+            echo "$OUT"
+            ID=$(echo "$OUT" | grep -oE 'AKfy[A-Za-z0-9_-]+' | head -1)
+            {
+              echo "### Deploy pertama berhasil"
+              echo "1. Simpan ini sebagai secret **DEPLOYMENT_ID**: \`$ID\`"
+              echo "2. Isi API_URL di config.js dengan URL di bawah"
+              echo "3. Buka URL itu sekali dalam keadaan login Google, lalu klik Allow"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "**API_URL:** https://script.google.com/macros/s/$ID/exec" >> "$GITHUB_STEP_SUMMARY"
