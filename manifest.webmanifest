@@ -1,0 +1,20 @@
+{
+  "name": "PSP-Dashboard",
+  "short_name": "PSP-Dashboard",
+  "description": "Kontrol proyek, loading MP dan gudang section PSP",
+  "start_url": "./#dashboard",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f3f4f6",
+  "theme_color": "#b3262d",
+  "icons": [
+    { "src": "img/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "img/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "img/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Gudang", "url": "./#gudang" },
+    { "name": "Proyek", "url": "./#proyek" }
+  ]
+}

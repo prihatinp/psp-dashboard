@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>PSP-Dashboard</title>
+<meta name="theme-color" content="#b3262d">
+<meta name="description" content="Kontrol proyek, loading MP dan gudang section PSP">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="img/icon-192.png">
+<link rel="apple-touch-icon" href="img/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="PSP-Dashboard">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="bar">
+    <a class="brand" href="#dashboard"><img src="img/logo-musashi.png" alt="" onerror="this.remove()"><span>PSP-<b>Dashboard</b></span></a>
+    <nav id="nav">
+      <a href="#dashboard">Ringkasan</a>
+      <a href="#proyek">Proyek</a>
+      <a href="#loading">Loading MP</a>
+      <a href="#gudang">Gudang</a>
+    </nav>
+    <button class="btn pri" id="install" hidden style="padding:5px 10px;font-size:12.5px">Pasang di HP</button>
+    <span id="status" class="status">memuat…</span>
+  </div>
+</header>
+<div id="demo" class="demo" hidden>Mode demo: data contoh dari <code>data/seed.json</code>, perubahan tidak tersimpan. Isi <code>API_URL</code> di <code>config.js</code> untuk memakai Google Sheet.</div>
+<main id="view" class="wrap"></main>
+<div id="modal"></div>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
