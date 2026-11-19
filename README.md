@@ -82,6 +82,20 @@ Saat pertama dipanggil, Apps Script membuat Google Sheet **"PSP Dashboard — Da
 
 Tanpa PIN, aplikasi hanya bisa dibaca.
 
+## Detail proyek & Gantt tahapan
+
+Klik satu proyek di menu Proyek → halaman detail:
+- Progress aktual vs seharusnya hari ini (on track / terlambat)
+- Gantt per tahap: bar plan (biru muda) dan aktual (biru, hijau jika selesai), garis merah = hari ini
+- Jam kerja dari menu Lapor per tahap dan per orang, aktivitas terakhir
+- **Edit tahapan**: ubah tanggal plan/aktual, progress %, tambah/hapus tahap. Proyek yang belum punya tahapan mendapat jadwal usulan otomatis (6 tahap) dari bulan mulai–selesai.
+
+Data tahapan disimpan di tab `Stages`.
+
+## Daily Job
+
+Ringkasan → tombol **📋 Daily Job hari ini** → teks siap kirim (bisa diedit) → **Salin** atau **Buka WhatsApp**.
+
 ## Tugas mingguan (menu Tugas)
 
 - Setiap orang boleh membuat tugas untuk dirinya sendiri.

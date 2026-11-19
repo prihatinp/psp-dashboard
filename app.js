@@ -9,7 +9,7 @@ const ST = {
 const DONE = ['Masspro', 'Closed', 'Completed'], OFF = ['Hold', 'Lost'], EARLY = ['Plan', 'Propose', 'RFQ', 'Quotation'];
 const SK = { MECH: 'Mekanik', ELEC: 'Elektrik/PLC', AI: 'AI/Software', IOT: 'IoT/AGV', LAYOUT: 'Layout/Asset' };
 const MLBL = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-const S = { P: [], M: [], E: [], I: [], MV: [], R: [], T: [], cfg: {}, f: { jenis: 'all', q: '', status: '' }, g: { q: '', cat: '' } };
+const S = { P: [], M: [], E: [], I: [], MV: [], R: [], T: [], ST: [], cfg: {}, f: { jenis: 'all', q: '', status: '' }, g: { q: '', cat: '' } };
 const now = new Date(), CUR = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
 
 /* ---------- helpers ---------- */
@@ -59,6 +59,7 @@ async function load() {
     S.E = d.Effort || [];
     S.I = (d.Items || []).map(i => ({ ...i, stok: num(i.stok), minStok: num(i.minStok) }));
     S.MV = d.Moves || [];
+    S.ST = (d.Stages || []).map(x => ({ ...x, urut: num(x.urut), progress: num(x.progress), mulaiPlan: String(x.mulaiPlan || '').slice(0, 10), selesaiPlan: String(x.selesaiPlan || '').slice(0, 10), mulaiAkt: String(x.mulaiAkt || '').slice(0, 10), selesaiAkt: String(x.selesaiAkt || '').slice(0, 10) }));
     S.T = (d.Tasks || []).map(t => ({ ...t, nrp: String(t.nrp), minggu: String(t.minggu).slice(0, 10), target: String(t.target || '').slice(0, 10) }));
     S.R = (d.Reports || []).map(r => ({ ...r, nrp: String(r.nrp), jam: num(r.jam), tanggal: String(r.tanggal).slice(0, 10) }));
     S.cfg = d.Config || {};
@@ -74,6 +75,7 @@ function demoApi(a, p) {
   if (a === 'remove') { const arr = tabs[p.tab]; const i = arr.findIndex(x => x.id === p.id); if (i >= 0) arr.splice(i, 1); return { ok: true }; }
   if (a === 'move') { const it = S.I.find(x => x.id === p.itemId); const ak = p.jenis === 'IN' ? it.stok + num(p.qty) : it.stok - num(p.qty); if (ak < 0) throw new Error('Stok tidak cukup (sisa ' + it.stok + ')'); it.stok = ak; S.MV.push({ id: 'mv' + Date.now(), waktu: new Date().toISOString(), ...p, stokAkhir: ak }); return { ok: true }; }
   if (a === 'report') { const rows = p.rows.map(r => ({ ...r, id: 'rp' + Math.random().toString(36).slice(2, 8) })); S.R.push(...rows); return { ok: true, rows }; }
+  if (a === 'stages') { S.ST = S.ST.filter(x => x.projectId !== p.projectId).concat(p.rows.map((r, i) => ({ ...r, id: 'st' + i + Date.now(), projectId: p.projectId }))); return { ok: true }; }
   if (a === 'task') { const r = { ...p.row, id: p.row.id || 'tk' + Math.random().toString(36).slice(2, 8) }; const i = S.T.findIndex(t => t.id === r.id); i >= 0 ? S.T[i] = r : S.T.push(r); return { ok: true, row: r }; }
   if (a === 'untask') { S.T = S.T.filter(t => t.id !== p.id); return { ok: true }; }
   if (a === 'unreport') { S.R = S.R.filter(r => r.id !== p.id); return { ok: true }; }
@@ -133,8 +135,10 @@ function supply() { const o = {}; Object.keys(SK).forEach(k => o[k] = 0); for (c
 
 /* ---------- router ---------- */
 function render() {
-  const r = (location.hash || '#dashboard').slice(1);
+  const h = (location.hash || '#dashboard').slice(1), [r, arg] = h.split('/');
   document.querySelectorAll('#nav a').forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + r));
+  window.scrollTo(0, 0);
+  if (r === 'proyek' && arg) return vProjDetail(decodeURIComponent(arg));
   ({ dashboard: vDash, lapor: vLapor, tugas: vTugas, proyek: vProj, loading: vLoad, gudang: vGudang }[r] || vDash)();
 }
 window.addEventListener('hashchange', render);
@@ -148,7 +152,8 @@ function vDash() {
   const peak = Math.max(...months().map((m, i) => dm.Internal[i] + dm.Global[i]));
   const over = S.M.filter(m => loadOf(m.nrp, CUR).t > m.kapasitas);
   const low = S.I.filter(i => i.stok <= i.minStok);
-  $('#view').innerHTML = `<div class="tiles">
+  $('#view').innerHTML = `<div class="toolbar" style="margin-bottom:10px"><h2 style="margin:0">Ringkasan</h2><span class="grow"></span><button class="btn pri" id="dj">📋 Daily Job ${isWork(today()) ? 'hari ini' : esc(dlabel(lastWorkday()))}</button></div>
+  <div class="tiles">
     <div class="tile"><div class="k">KPI Reduce MP</div><div class="v num">${fmt(real)}<small> / ${fmt(plan)} plan · target ${fmt(target)}</small></div><div class="s">${target - plan > 0 ? `Gap <b style="color:var(--bad)">${fmt(target - plan)} MP</b> belum ada proyeknya` : 'Plan sudah menutup target'}</div></div>
     <div class="tile"><div class="k">Support Global aktif</div><div class="v num">${gAct.length}<small> request</small></div><div class="s">IDR ${fmt(gAct.reduce((a, p) => a + p.budget, 0))} Mio · ${gAct.filter(p => !EARLY.includes(p.status)).length} sudah PO</div></div>
     <div class="tile ${peak > cap * 1.2 ? 'bad' : ''}"><div class="k">Beban puncak vs tim</div><div class="v num">${fmt(peak / (cap || 1), 1)}×</div><div class="s">Butuh ${fmt(peak)} orang, tim ${fmt(cap, 1)} orang</div></div>
@@ -162,7 +167,8 @@ function vDash() {
     <div class="panel"><h3>Perlu perhatian</h3><div class="list">${attention(over, low)}</div></div>
   </div>`;
   chartDemand($("#cDem"), dm, cap);
-  document.querySelectorAll('[data-p]').forEach(b => b.onclick = () => projForm(b.dataset.p));
+  $('#dj').onclick = () => dailyJobModal(isWork(today()) ? today() : lastWorkday());
+  document.querySelectorAll('[data-p]').forEach(b => b.onclick = () => location.hash = '#proyek/' + encodeURIComponent(b.dataset.p));
   document.querySelectorAll('[data-i]').forEach(b => b.onclick = () => itemDetail(b.dataset.i));
   document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => location.hash = b.dataset.go);
 }
@@ -219,7 +225,7 @@ function vProj() {
   $('#fs').onchange = e => { f.status = e.target.value; vProj(); };
   const qi = $('#fq'); qi.oninput = () => { f.q = qi.value; clearTimeout(qi._t); qi._t = setTimeout(() => { vProj(); const n = $('#fq'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 250); };
   $('#add').onclick = () => projForm(null);
-  document.querySelectorAll('tr[data-p]').forEach(r => { r.onclick = () => projForm(r.dataset.p); r.onkeydown = e => { if (e.key === 'Enter') projForm(r.dataset.p); }; });
+  document.querySelectorAll('tr[data-p]').forEach(r => { const go = () => location.hash = '#proyek/' + encodeURIComponent(r.dataset.p); r.onclick = go; r.onkeydown = e => { if (e.key === 'Enter') go(); }; });
 }
 function monthOpts(v) { const o = []; for (let y = 2025; y <= 2028; y++) for (let m = 1; m <= 12; m++) o.push(y + '-' + String(m).padStart(2, '0')); return '<option value="">—</option>' + o.map(x => `<option value="${x}" ${x === v ? 'selected' : ''}>${mName(x)}</option>`).join(''); }
 function projForm(id) {
@@ -629,6 +635,115 @@ function personCard(m, me, lastWk) {
     ${form}
     ${can && !form ? `<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button class="btn" data-tadd="${esc(m.nrp)}">+ Tugas</button>${carry ? `<button class="btn" data-carry="${esc(m.nrp)}">↻ Bawa ${carry} tugas belum selesai dari minggu lalu</button>` : ''}</div>` : ''}
   </div>`;
+}
+
+
+/* ---------- DAILY JOB (Ringkasan) ---------- */
+function dailyJobModal(d) {
+  const pr = periodOf('hari', d), st = stats(pr), txt = dailyText(pr, st);
+  openModal(`<div class="hd"><div><small class="muted mono">DAILY JOB PSP</small><h2>${esc(pr.label)}</h2></div><button class="btn" data-close>✕</button></div>
+  <div class="bd"><div class="toolbar" style="margin:0"><button class="btn" id="djPrev">‹ Hari sebelumnya</button>${d < today() ? '<button class="btn" id="djNext">Hari berikutnya ›</button>' : ''}</div>
+  <textarea id="djT" rows="16" style="font:13px var(--mono)">${esc(txt)}</textarea>
+  <p class="muted" style="margin:0;font-size:12.5px">Teks bisa diedit dulu sebelum disalin. ⚡ = pekerjaan insidentil di luar rencana.</p></div>
+  <div class="ft"><button class="btn pri" id="djCopy">Salin untuk WA / email</button><a class="btn" id="djWa" target="_blank" rel="noopener">Buka WhatsApp</a></div>`, () => {
+    $('#djCopy').onclick = () => copyText($('#djT').value);
+    const wa = $('#djWa'); const upd = () => wa.href = 'https://wa.me/?text=' + encodeURIComponent($('#djT').value); upd(); $('#djT').oninput = upd;
+    $('#djPrev').onclick = () => { let x = addDays(d, -1); while (!isWork(x)) x = addDays(x, -1); dailyJobModal(x); };
+    const n = $('#djNext'); if (n) n.onclick = () => { let x = addDays(d, 1); while (!isWork(x) && x < today()) x = addDays(x, 1); dailyJobModal(x); };
+  });
+}
+
+/* ---------- DETAIL PROYEK: tahapan, Gantt plan vs aktual ---------- */
+const STAGE_TPL = [['1. Evaluasi awal / referensi', 10], ['2. Design & prepare LO', 20], ['3. Penawaran, ringi, PR/PO', 15], ['4. Fabrikasi / assy / pelaksanaan LO', 35], ['5. Trial, evaluasi, approval', 15], ['6. Masspro / serah terima', 5]];
+const pStart = p => p.mulai ? p.mulai + '-01' : today();
+const pEnd = p => p.selesai ? addDays(addDays(p.selesai + '-01', 32).slice(0, 7) + '-01', -1) : addDays(pStart(p), 90);
+const dayDiff = (a, b) => Math.round((new Date(b + 'T00:00') - new Date(a + 'T00:00')) / 864e5);
+function proposeStages(p) {
+  const a = pStart(p), n = Math.max(7, dayDiff(a, pEnd(p))); let cur = a, acc = 0;
+  return STAGE_TPL.map(([t, w], i) => { acc += w; const end = i === STAGE_TPL.length - 1 ? pEnd(p) : addDays(a, Math.round(n * acc / 100)); const r = { urut: i + 1, tahap: t, mulaiPlan: cur, selesaiPlan: end, mulaiAkt: '', selesaiAkt: '', progress: 0, catatan: '' }; cur = addDays(end, 1); return r; });
+}
+const fmtD = s => s ? new Date(s + 'T00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : '–';
+const stageNo = t => parseInt(String(t || '').trim(), 10) || 0;
+const PD = S.pd = { edit: false, rows: null };
+function vProjDetail(id) {
+  const p = S.P.find(x => x.id === id || x.kode === id);
+  if (!p) { $('#view').innerHTML = `<p><a href="#proyek">‹ Semua proyek</a></p><div class="empty">Proyek tidak ditemukan.</div>`; return; }
+  if (PD.id !== p.id) { PD.id = p.id; PD.edit = false; PD.rows = null; }
+  const saved = S.ST.filter(x => x.projectId === p.id).sort((a, b) => a.urut - b.urut), usul = !saved.length;
+  const rows = PD.rows || (usul ? proposeStages(p) : saved.map(x => ({ ...x })));
+  const rp = S.R.filter(r => r.kode === p.kode), jam = rp.reduce((a, r) => a + r.jam, 0);
+  const durTot = rows.reduce((a, r) => a + Math.max(1, dayDiff(r.mulaiPlan, r.selesaiPlan)), 0);
+  const prog = durTot ? rows.reduce((a, r) => a + num(r.progress) * Math.max(1, dayDiff(r.mulaiPlan, r.selesaiPlan)), 0) / durTot : 0;
+  const planNow = (() => { const t = today(); let done = 0; rows.forEach(r => { const d = Math.max(1, dayDiff(r.mulaiPlan, r.selesaiPlan)); if (t > r.selesaiPlan) done += d; else if (t >= r.mulaiPlan) done += d * (dayDiff(r.mulaiPlan, t) / d); }); return durTot ? done / durTot * 100 : 0; })();
+  const byStage = {}; rp.forEach(r => { const k = stageNo(r.tahap); byStage[k] = (byStage[k] || 0) + r.jam; });
+  const byPerson = {}; rp.forEach(r => { byPerson[r.nrp] = (byPerson[r.nrp] || 0) + r.jam; });
+  $('#view').innerHTML = `<p style="margin:0 0 8px"><a href="#proyek">‹ Semua proyek</a></p>
+  <div class="toolbar"><div style="min-width:0"><small class="mono muted"><span class="tag ${p.jenis === 'Global' ? 'g' : ''}">${p.jenis === 'Global' ? 'GLOBAL' : 'INT'}</span> ${esc(p.kode)} · ${esc(p.customer || '')}</small><h2 style="margin:2px 0 0">${esc(p.nama)}</h2></div><span class="grow"></span><span class="pill ${tone(p.status)}" style="font-size:13px">${esc(p.status)}</span><button class="btn" id="pdEdit">Edit info proyek</button></div>
+  <div class="tiles">
+    <div class="tile"><div class="k">Progress aktual</div><div class="v num">${fmt(prog)}<small>%</small></div><div class="s">Seharusnya ${fmt(planNow)}% per hari ini ${prog + 5 < planNow ? '· <b style="color:var(--bad)">terlambat</b>' : prog >= planNow - 5 ? '· <b style="color:var(--ok)">on track</b>' : ''}</div></div>
+    <div class="tile"><div class="k">Jadwal</div><div class="v num" style="font-size:28px">${mName(p.mulai)} – ${mName(p.selesai)}</div><div class="s">${p.budget ? 'IDR ' + fmt(p.budget) + ' Mio' : ''}${p.saveMP ? ' · Save ' + p.saveMP + ' MP' : ''}</div></div>
+    <div class="tile"><div class="k">Jam kerja tercatat</div><div class="v num">${fmt(jam, 1)}<small> jam</small></div><div class="s">${Object.keys(byPerson).length} orang · dari menu Lapor</div></div>
+    <div class="tile"><div class="k">Tim</div><div style="margin-top:6px">${team(p).map(t => `<span class="pill" style="margin:2px">${esc(short(member(t.nrp)?.nama || t.nrp))} ${t.pct}%</span>`).join('') || '<span class="muted">belum ada</span>'}${p.picLuar ? `<div class="s">+ ${esc(p.picLuar)}</div>` : ''}</div></div>
+  </div>
+  <div class="panel"><div class="toolbar" style="margin-bottom:6px"><h3 style="margin:0">Tahapan & timeline</h3><span class="grow"></span>
+    ${usul && !PD.edit ? '<span class="pill warn">jadwal usulan otomatis — belum disimpan</span>' : ''}
+    ${PD.edit ? '' : `<button class="btn ${usul ? 'pri' : ''}" id="pdEditSt">${usul ? 'Atur & simpan tahapan' : 'Edit tahapan'}</button>`}</div>
+    <div class="legend"><span><i class="sw" style="background:var(--int-soft,#cfe0f6);border:1px solid var(--int)"></i>Plan</span><span><i class="sw" style="background:var(--int)"></i>Aktual</span><span><i class="sw" style="background:var(--ok)"></i>Selesai</span><span><i class="sw" style="background:var(--accent);width:3px"></i>Hari ini</span></div>
+    <div class="gwrap" id="pdG">${ganttSvg(rows, p)}</div>
+    ${PD.edit ? stageEditor(rows) : `<div class="tbl" style="margin-top:10px"><table style="min-width:640px"><thead><tr><th>Tahap</th><th>Plan</th><th>Aktual</th><th class="r">Progress</th><th class="r">Jam lapor</th><th>Catatan</th></tr></thead><tbody>
+      ${rows.map(r => `<tr><td>${esc(r.tahap)}</td><td class="num">${fmtD(r.mulaiPlan)} – ${fmtD(r.selesaiPlan)}</td><td class="num">${r.mulaiAkt ? fmtD(r.mulaiAkt) + ' – ' + (r.selesaiAkt ? fmtD(r.selesaiAkt) : '<i>berjalan</i>') : '–'}</td><td class="r"><span class="pill ${num(r.progress) >= 100 ? 'ok' : num(r.progress) > 0 ? 'info' : ''}">${fmt(r.progress)}%</span></td><td class="r num">${byStage[stageNo(r.tahap)] ? fmt(byStage[stageNo(r.tahap)], 1) : ''}</td><td>${esc(r.catatan || '')}</td></tr>`).join('')}</tbody></table></div>`}
+  </div>
+  <div class="grid2" style="margin-top:12px">
+    <div class="panel"><h3>Aktivitas terakhir (dari Lapor)</h3>${rp.length ? `<div class="daily">${rp.slice().sort((a, b) => b.tanggal.localeCompare(a.tanggal)).slice(0, 12).map(r => `<div class="dr"><span>${esc(r.uraian || r.tahap || '-')}<small>${esc(fmtD(r.tanggal))} · ${esc(short(member(r.nrp)?.nama || r.nrp))}${r.tahap ? ' · ' + esc(String(r.tahap).replace(/^\d\.\s*/, '')) : ''}</small></span><b class="num">${fmt(r.jam, 1)}</b></div>`).join('')}</div>` : '<p class="muted">Belum ada laporan untuk proyek ini.</p>'}</div>
+    <div class="panel"><h3>Jam per orang</h3>${Object.keys(byPerson).length ? Object.entries(byPerson).sort((a, b) => b[1] - a[1]).map(([n, j]) => `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--line)"><span>${esc(member(n)?.nama || n)}</span><b class="num">${fmt(j, 1)} j</b></div>`).join('') : '<p class="muted">–</p>'}
+      ${p.catatan ? `<h3 style="margin-top:14px">Catatan</h3><p style="margin:0">${esc(p.catatan)}</p>` : ''}</div>
+  </div>`;
+  $('#pdEdit').onclick = () => projForm(p.id);
+  const es = $('#pdEditSt'); if (es) es.onclick = () => { PD.edit = true; PD.rows = rows.map(r => ({ ...r })); vProjDetail(p.id); };
+  if (PD.edit) bindStageEditor(p);
+}
+function ganttSvg(rows, p) {
+  if (!rows.length) return '<p class="muted">Belum ada tahapan.</p>';
+  const all = rows.flatMap(r => [r.mulaiPlan, r.selesaiPlan, r.mulaiAkt, r.selesaiAkt]).filter(Boolean).concat([today()]);
+  let a = all.reduce((x, y) => x < y ? x : y), b = all.reduce((x, y) => x > y ? x : y);
+  a = weekOf(addDays(a, -3)); b = addDays(b, 7);
+  const days = Math.max(14, dayDiff(a, b)), LW = 210, PX = Math.max(4, Math.min(14, 760 / days)), W = LW + days * PX + 10, RH = 34, T = 34, H = T + rows.length * RH + 6;
+  const x = d => LW + dayDiff(a, d) * PX;
+  let g = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Gantt tahapan proyek" style="display:block">`;
+  // month labels + week grid
+  for (let d = a; d <= b; d = addDays(d, 7)) g += `<line x1="${x(d)}" x2="${x(d)}" y1="${T - 6}" y2="${H}" stroke="var(--line)"/>`;
+  let m = a.slice(0, 7) + '-01'; if (m < a) m = addDays(addDays(m, 32).slice(0, 7) + '-01', 0);
+  for (; m <= b; m = addDays(m, 32).slice(0, 7) + '-01') g += `<line x1="${x(m)}" x2="${x(m)}" y1="0" y2="${H}" stroke="var(--muted)" stroke-opacity=".5"/><text x="${x(m) + 4}" y="14" style="font:600 11px var(--mono);fill:var(--fg)">${MLBL[+m.slice(5, 7) - 1]} ${m.slice(2, 4)}</text>`;
+  rows.forEach((r, i) => {
+    const y = T + i * RH, pr = num(r.progress), done = pr >= 100;
+    g += `<text x="6" y="${y + 15}" style="font:500 12px var(--body);fill:var(--fg)">${esc(String(r.tahap).slice(0, 30))}</text><text x="6" y="${y + 28}" style="font:10.5px var(--mono);fill:var(--muted)">${fmt(pr)}%</text>`;
+    if (r.mulaiPlan && r.selesaiPlan) g += `<rect x="${x(r.mulaiPlan)}" y="${y + 4}" width="${Math.max(3, (dayDiff(r.mulaiPlan, r.selesaiPlan) + 1) * PX)}" height="11" rx="3" fill="#cfe0f6" stroke="var(--int)" stroke-width="1"/>`;
+    if (r.mulaiAkt) { const e = r.selesaiAkt || today(), w = Math.max(3, (dayDiff(r.mulaiAkt, e) + 1) * PX); g += `<rect x="${x(r.mulaiAkt)}" y="${y + 18}" width="${w}" height="11" rx="3" fill="${done ? 'var(--ok)' : 'var(--int)'}"/>`; }
+    else if (r.mulaiPlan && pr > 0) { const w = Math.max(3, (dayDiff(r.mulaiPlan, r.selesaiPlan) + 1) * PX * pr / 100); g += `<rect x="${x(r.mulaiPlan)}" y="${y + 18}" width="${w}" height="11" rx="3" fill="${done ? 'var(--ok)' : 'var(--int)'}"/>`; }
+    if (!done && r.selesaiPlan && r.selesaiPlan < today()) g += `<text x="${x(r.selesaiPlan) + (dayDiff(r.mulaiPlan, r.selesaiPlan) + 1) * PX * 0 + 6}" y="${y + 14}" style="font:700 10px var(--body);fill:var(--bad)">!</text>`;
+  });
+  const tx = x(today()); g += `<line x1="${tx}" x2="${tx}" y1="${T - 10}" y2="${H}" stroke="var(--accent)" stroke-width="2"/><text x="${tx + 3}" y="${T - 12}" style="font:600 10px var(--body);fill:var(--accent)">hari ini</text></svg>`;
+  return g;
+}
+function stageEditor(rows) {
+  return `<div class="tbl" style="margin-top:10px"><table style="min-width:860px" id="stTbl"><thead><tr><th style="width:26%">Tahap</th><th>Mulai plan</th><th>Selesai plan</th><th>Mulai aktual</th><th>Selesai aktual</th><th style="width:90px">Progress %</th><th>Catatan</th><th></th></tr></thead><tbody>
+  ${rows.map((r, i) => `<tr><td><input data-i="${i}" data-f="tahap" value="${esc(r.tahap)}"></td><td><input type="date" data-i="${i}" data-f="mulaiPlan" value="${esc(r.mulaiPlan)}"></td><td><input type="date" data-i="${i}" data-f="selesaiPlan" value="${esc(r.selesaiPlan)}"></td><td><input type="date" data-i="${i}" data-f="mulaiAkt" value="${esc(r.mulaiAkt)}"></td><td><input type="date" data-i="${i}" data-f="selesaiAkt" value="${esc(r.selesaiAkt)}"></td><td><input type="number" min="0" max="100" step="5" data-i="${i}" data-f="progress" value="${num(r.progress)}"></td><td><input data-i="${i}" data-f="catatan" value="${esc(r.catatan || '')}"></td><td><button class="btn" data-rm="${i}" aria-label="Hapus">✕</button></td></tr>`).join('')}
+  </tbody></table></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn" id="stAdd">+ Tahap</button><button class="btn" id="stReset">Isi ulang dari template</button><span class="grow" style="flex:1"></span><button class="btn pri" id="stSave">Simpan tahapan</button><button class="btn" id="stX">Batal</button></div>
+  <p class="muted" style="font-size:12px;margin:6px 0 0">Tips: isi "Mulai aktual" saat tahap mulai dikerjakan, "Selesai aktual" + progress 100% saat selesai. Nomor di depan nama tahap (1–6) dipakai untuk mencocokkan jam dari menu Lapor.</p>`;
+}
+function bindStageEditor(p) {
+  const rows = PD.rows, sync = () => document.querySelectorAll('#stTbl [data-f]').forEach(inp => { rows[+inp.dataset.i][inp.dataset.f] = inp.dataset.f === 'progress' ? num(inp.value) : inp.value; });
+  document.querySelectorAll('#stTbl [data-f]').forEach(inp => inp.onchange = () => { sync(); $('#pdG').innerHTML = ganttSvg(rows, p); });
+  document.querySelectorAll('#stTbl [data-rm]').forEach(b => b.onclick = () => { sync(); rows.splice(+b.dataset.rm, 1); vProjDetail(p.id); });
+  $('#stAdd').onclick = () => { sync(); const last = rows[rows.length - 1]; const st = last ? addDays(last.selesaiPlan, 1) : pStart(p); rows.push({ urut: rows.length + 1, tahap: (rows.length + 1) + '. ', mulaiPlan: st, selesaiPlan: addDays(st, 14), mulaiAkt: '', selesaiAkt: '', progress: 0, catatan: '' }); vProjDetail(p.id); };
+  $('#stReset').onclick = () => { PD.rows = proposeStages(p); vProjDetail(p.id); };
+  $('#stX').onclick = () => { PD.edit = false; PD.rows = null; vProjDetail(p.id); };
+  $('#stSave').onclick = async () => { sync();
+    for (const r of rows) { if (!r.tahap.trim()) return toast('Nama tahap tidak boleh kosong'); if (r.mulaiPlan && r.selesaiPlan && r.selesaiPlan < r.mulaiPlan) return toast('Tanggal selesai plan sebelum mulai: ' + r.tahap); }
+    const out = rows.map((r, i) => ({ urut: i + 1, tahap: r.tahap.trim(), mulaiPlan: r.mulaiPlan, selesaiPlan: r.selesaiPlan, mulaiAkt: r.mulaiAkt, selesaiAkt: r.selesaiAkt, progress: num(r.progress), catatan: r.catatan || '' }));
+    $('#stSave').disabled = true; const res = await teamSend('stages', { projectId: p.id, rows: out }); $('#stSave').disabled = false;
+    if (res) { if (!DEMO) S.ST = S.ST.filter(x => x.projectId !== p.id).concat((res.rows || out).map(r => ({ ...r, projectId: p.id }))); PD.edit = false; PD.rows = null; toast('Tahapan tersimpan'); vProjDetail(p.id); } };
 }
 
 /* ---------- aplikasi HP (PWA) ---------- */

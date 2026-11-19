@@ -14,10 +14,11 @@ var TABS = {
   Items:    ['id', 'sku', 'nama', 'kategori', 'satuan', 'stok', 'minStok', 'lokasi', 'foto', 'spesifikasi', 'updatedAt'],
   Moves:    ['id', 'waktu', 'itemId', 'jenis', 'qty', 'stokAkhir', 'oleh', 'proyek', 'catatan'],
   Reports:  ['id', 'tanggal', 'nrp', 'nama', 'kode', 'kategori', 'tahap', 'uraian', 'jam', 'status', 'createdAt', 'taskId', 'peminta'],
+  Stages:   ['id', 'projectId', 'urut', 'tahap', 'mulaiPlan', 'selesaiPlan', 'mulaiAkt', 'selesaiAkt', 'progress', 'catatan', 'updatedAt'],
   Tasks:    ['id', 'minggu', 'nrp', 'kode', 'judul', 'target', 'status', 'oleh', 'catatan', 'updatedAt'],
   Config:   ['key', 'value']
 };
-var KEY = { Projects: 'id', Members: 'nrp', Effort: 'kode', Items: 'id', Moves: 'id', Reports: 'id', Tasks: 'id', Config: 'key' };
+var KEY = { Projects: 'id', Members: 'nrp', Effort: 'kode', Items: 'id', Moves: 'id', Reports: 'id', Tasks: 'id', Stages: 'id', Config: 'key' };
 var EDITABLE = ['Projects', 'Members', 'Effort', 'Items', 'Config', 'Tasks'];
 
 function doGet(e)  { return out_(handle_((e && e.parameter) || {})); }
@@ -42,6 +43,7 @@ function handle_(p) {
       case 'report':   checkTeamPin_(p); return report_(p);
       case 'unreport': checkTeamPin_(p); return unreport_(p);
       case 'task':     checkTeamPin_(p); return task_(p.row);
+      case 'stages':   checkTeamPin_(p); return stages_(p);
       case 'untask':   checkTeamPin_(p); return untask_(p.id);
       default: return { ok: false, error: 'Action tidak dikenal: ' + p.action };
     }
@@ -62,7 +64,7 @@ function db_() {
 
 function setup_() {
   var cache = CacheService.getScriptCache();
-  if (cache.get('setup-v3')) return;
+  if (cache.get('setup-v4')) return;
   var ss = db_();
   Object.keys(TABS).forEach(function (name) {
     var sh = ss.getSheetByName(name);
@@ -90,7 +92,7 @@ function setup_() {
   }
     var keys = rows_('Config').map(function (r) { return r.key; });
   if (keys.indexOf('PIN_TIM') < 0) cfg.appendRow(['PIN_TIM', '']);
-  cache.put('setup-v3', '1', 21600);
+  cache.put('setup-v4', '1', 21600);
 }
 
 function rows_(name) {
@@ -107,6 +109,7 @@ function readAll_() {
   ['Projects', 'Members', 'Effort', 'Items'].forEach(function (t) { d[t] = rows_(t); });
   d.Moves = rows_('Moves').slice(-500);
   var now = new Date(), from = Utilities.formatDate(new Date(now.getFullYear(), now.getMonth() - 2, 1), 'Asia/Jakarta', 'yyyy-MM-dd');
+  d.Stages = rows_('Stages');
   d.Tasks = rows_('Tasks').filter(function (r) { return String(r.minggu) >= from; });
   d.Reports = rows_('Reports').filter(function (r) { return String(r.tanggal) >= from; });
   d.Config = {};
@@ -200,6 +203,26 @@ function unreport_(p) {
     if (nrp !== String(p.nrp)) throw new Error('Hanya bisa menghapus laporan sendiri');
     sh.deleteRow(r);
     return { ok: true };
+  });
+}
+
+/* ---------- Tahapan proyek (Gantt) ---------- */
+// Simpan semua tahapan satu proyek sekaligus: baris lama proyek itu dihapus, diganti yang baru.
+function stages_(p) {
+  if (!p.projectId) throw new Error('Proyek tidak diketahui');
+  return withLock_(function () {
+    var sh = db_().getSheetByName('Stages'), h = header_(sh), n = sh.getLastRow();
+    if (n > 1) {
+      var col = h.indexOf('projectId'), vals = sh.getRange(2, 1, n - 1, h.length).getValues();
+      for (var i = vals.length - 1; i >= 0; i--) if (String(vals[i][col]) === String(p.projectId)) sh.deleteRow(i + 2);
+    }
+    var now = new Date().toISOString(), out = (p.rows || []).map(function (r, i) {
+      r.id = 'st_' + Utilities.getUuid().slice(0, 8); r.projectId = p.projectId; r.urut = i + 1; r.updatedAt = now; return r;
+    });
+    if (out.length) sh.getRange(sh.getLastRow() + 1, 1, out.length, h.length).setValues(out.map(function (r) {
+      return h.map(function (k) { return r[k] === undefined || r[k] === null ? '' : String(r[k]); });
+    }));
+    return { ok: true, rows: out };
   });
 }
 

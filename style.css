@@ -174,3 +174,5 @@ label.f{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--mu
 .dr{display:flex;justify-content:space-between;gap:10px;padding:3px 0 3px 10px;font-size:13.5px;border-left:3px solid var(--int);margin-top:4px}
 .dr.ins{border-left-color:var(--glb)}
 .dr small{display:block;color:var(--muted);font-size:11.5px}
+.gwrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--card);padding:4px 0}
+#stTbl input{padding:5px 6px;font-size:13px}
