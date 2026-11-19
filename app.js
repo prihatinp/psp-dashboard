@@ -511,7 +511,7 @@ function stats(pr) {
     return { m, rs, jam, g, filled, hari: days.length, jk };
   });
 }
-const RP = S.rp = { mode: 'hari', ref: null };
+const RP = S.rp = { mode: 'hari', ref: null, fmt: 'baru' };
 function vLaporan() {
   $('#view').innerHTML = `<div class="lapor" style="max-width:900px"><h2>Laporan tim</h2>
     <p class="muted" style="margin:-6px 0 6px;font-size:13px"><b>Harian</b> = Daily Job untuk atasan · <b>Mingguan</b> = paket ZIP untuk server perusahaan · <b>Bulanan</b> = rekap WLA</p>
@@ -523,7 +523,7 @@ function teamPanel() {
   const pr = periodOf(RP.mode, RP.ref), st = stats(pr), tot = st.reduce((a, x) => a + x.jam, 0), ins = st.reduce((a, x) => a + (x.g.Support || 0), 0), proj = st.reduce((a, x) => a + (x.g.Proyek || 0), 0);
   const miss = st.filter(x => !x.rs.length);
   const btn = RP.mode === 'hari' ? `<button class="btn pri" id="rpWa">Salin untuk WA / email</button><button class="btn" id="rpXls">Excel</button>`
-    : RP.mode === 'minggu' ? `<button class="btn pri" id="rpZip">Download paket mingguan (ZIP)</button>` : `<button class="btn pri" id="rpXls">Download Excel bulanan</button>`;
+    : `<label class="f" style="flex-direction:row;align-items:center;gap:6px">File per orang:<select id="rpFmt" style="width:auto">${[['baru', 'Format Baru (harian)'], ['lama', 'Format Lama (matriks jam)'], ['keduanya', 'Keduanya'], ['log', 'Format Log sederhana']].map(([k, l]) => `<option value="${k}" ${RP.fmt === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label><button class="btn pri" id="rpZip">Download paket ${RP.mode === 'minggu' ? 'mingguan' : 'bulanan'} (ZIP)</button>${RP.mode === 'bulan' ? '<button class="btn" id="rpXls">Excel rekap saja</button>' : ''}`;
   $('#lpTeamBody').innerHTML = `<div class="toolbar" style="margin-top:10px">
     <div class="seg">${[['hari', 'Harian'], ['minggu', 'Mingguan'], ['bulan', 'Bulanan']].map(([k, l]) => `<button data-rm="${k}" class="${RP.mode === k ? 'on' : ''}">${l}</button>`).join('')}</div>
     <input type="date" id="rpRef" value="${RP.ref}" max="${today()}" style="width:auto"></div>
@@ -543,6 +543,7 @@ function teamPanel() {
   const wa = $('#rpWa'); if (wa) wa.onclick = () => copyText(dailyText(pr, st));
   const xl = $('#rpXls'); if (xl) xl.onclick = () => exportPeriod(pr, st, xl);
   const zp = $('#rpZip'); if (zp) zp.onclick = () => exportZip(pr, st, zp);
+  const fm = $('#rpFmt'); if (fm) fm.onchange = () => RP.fmt = fm.value;
 }
 function insBreakdown(st) {
   const by = {}; st.forEach(x => x.rs.filter(INS).forEach(r => { const k = r.peminta || 'tidak dicatat'; by[k] = (by[k] || 0) + r.jam; }));
@@ -582,15 +583,38 @@ async function exportPeriod(pr, st, b) {
   } catch (e) { toast('Gagal: ' + e.message); }
   b.disabled = false;
 }
-async function exportZip(pr, st, b) { // 1 folder: rekap + 1 file per orang, tinggal di-extract ke server
-  b.disabled = true; b.textContent = 'Menyiapkan…';
-  try { await need('XLSX'); await need('JSZip'); const X = window.XLSX, z = new window.JSZip(), dir = 'LAPORAN_PSP_' + pr.key, f = z.folder(dir);
+const loadScript = src => new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = src; sc.onload = ok; sc.onerror = () => no(new Error('Gagal memuat ' + src)); document.head.appendChild(sc); });
+const TPL = {};
+async function tpl(name) { if (!TPL[name]) { const r = await fetch('templates/' + name); if (!r.ok) throw new Error('Template ' + name + ' tidak ditemukan'); TPL[name] = await r.arrayBuffer(); } return TPL[name].slice(0); }
+const isProjK = k => !NONPROJ.some(n => n.kode === k) && k !== 'DKM';
+function planOf(r) {
+  if (isProjK(r.kode)) return (S.P.find(p => p.kode === r.kode) || {}).jenis === 'Global' ? 'Project global' : 'Project internal';
+  return { 'SUPPORT-GENBA': 'Support produksi', 'SUPPORT-PICA': 'Support produksi', 'PERBAIKAN': 'Support produksi', TRAINING: 'Training', 'RUTIN-MEETING': 'Meeting / rutin', 'RUTIN-ADMIN': 'Administrasi' }[r.kode] || 'Lain-lain';
+}
+async function exportZip(pr, st, b) { // 1 folder: rekap + file per orang (format lama / baru / log), tinggal di-extract ke server
+  const label = b.textContent; b.disabled = true; b.textContent = 'Menyiapkan…';
+  try { await need('XLSX'); await need('JSZip'); const fmt = RP.fmt || 'baru';
+    if (fmt !== 'log' && !window.ExcelJS) await loadScript('vendor/exceljs.min.js');
+    if (fmt !== 'log' && !window.PSPX) await loadScript('xlfmt.js');
+    const X = window.XLSX, z = new window.JSZip(), dir = 'LAPORAN_PSP_' + pr.key, f = z.folder(dir);
     const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, rekapSheet(X, pr, st), 'Rekap WLA'); X.utils.book_append_sheet(wb, allSheet(X, st), 'Semua');
     f.file('00_REKAP_' + pr.key + '.xlsx', X.write(wb, { bookType: 'xlsx', type: 'array' }));
-    st.forEach(x => { const w = X.utils.book_new(); X.utils.book_append_sheet(w, personSheet(X, x, pr), 'Log'); f.file(`LAPORAN_${x.m.nrp}_${x.m.nama.replace(/[^A-Za-z0-9]+/g, '_')}_${pr.key}.xlsx`, X.write(w, { bookType: 'xlsx', type: 'array' })); });
+    const dept = S.cfg.DEPARTEMEN || 'MME 2', approver = S.cfg.APPROVER || 'PRIHATIN PURWADI';
+    for (const x of st) {
+      if (!x.rs.length) continue;
+      const nm = `${x.m.nrp}_${x.m.nama.replace(/[^A-Za-z0-9]+/g, '_')}`;
+      const rows = x.rs.map(r => ({ ...r, uraian: r.uraian || kodeName(r.kode) }));
+      if (fmt === 'log') { const w = X.utils.book_new(); X.utils.book_append_sheet(w, personSheet(X, x, pr), 'Log'); f.file(`LAPORAN_${nm}_${pr.key}.xlsx`, X.write(w, { bookType: 'xlsx', type: 'array' })); continue; }
+      if (fmt === 'baru' || fmt === 'keduanya')
+        f.file(`HARIAN_${nm}_${pr.key}.xlsx`, await window.PSPX.baru(window.ExcelJS, await tpl('FORMAT_BARU.xlsx'), { nama: x.m.nama, nrp: x.m.nrp, dept, approver, rows,
+          planOf, dueOf: r => (r.taskId && (S.T.find(t => t.id === r.taskId) || {}).target) || '' }));
+      if (fmt === 'lama' || fmt === 'keduanya')
+        for (const ym of [...new Set(rows.map(r => r.tanggal.slice(0, 7)))])
+          f.file(`BULANAN_${nm}_${ym}.xlsx`, await window.PSPX.lama(window.ExcelJS, await tpl('FORMAT_LAMA.xlsx'), { nama: x.m.nama, nrp: x.m.nrp, ym, rows: rows.filter(r => r.tanggal.slice(0, 7) === ym), isProj: isProjK, projName: kodeName }));
+    }
     saveBlob(await z.generateAsync({ type: 'blob' }), dir + '.zip', 'application/zip');
   } catch (e) { toast('Gagal: ' + e.message); }
-  b.disabled = false; b.textContent = 'Download paket mingguan (ZIP)';
+  b.disabled = false; b.textContent = label;
 }
 
 /* ---------- TUGAS MINGGUAN ---------- */

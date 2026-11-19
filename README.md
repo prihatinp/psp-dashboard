@@ -102,6 +102,15 @@ Menu Loading → **👥 Kelola member** (PIN admin):
 
 Ringkasan → **📦 Laporan tim** → tab **Mingguan** → **Download paket mingguan (ZIP)** → extract → copy folder `LAPORAN_PSP_<tanggal Senin>` ke server.
 
+## Format Excel perusahaan (Format Lama & Format Baru)
+
+Di **Laporan tim** tab Mingguan/Bulanan, pilih **File per orang**:
+- **Format Baru (harian)**: 1 file per orang, 1 sheet per hari (seperti "30 September"), mengikuti template `templates/FORMAT_BARU.xlsx`. Pekerjaan dikelompokkan per jenis (maks 4 baris), jam per kelompok di kolom Note, Start/Finish dihitung dari total jam.
+- **Format Lama (matriks jam)**: 1 file per orang per bulan, mengikuti `templates/FORMAT_LAMA.xlsx`: proyek × 6 tahap × tanggal berisi jam, aktivitas lain-lain di bawah, kolom Sabtu/Minggu diwarnai otomatis.
+- **Keduanya**, atau **Format Log sederhana**.
+
+Template bisa diganti (layout sel harus sama). Departemen & nama approver bisa diatur di tab Config: `DEPARTEMEN`, `APPROVER`.
+
 ## Daily Job
 
 Ringkasan → tombol **📋 Daily Job hari ini** → teks siap kirim (bisa diedit) → **Salin** atau **Buka WhatsApp**.
