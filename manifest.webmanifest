@@ -2,7 +2,7 @@
   "name": "PSP-Dashboard",
   "short_name": "PSP-Dashboard",
   "description": "Kontrol proyek, loading MP dan gudang section PSP",
-  "start_url": "./#dashboard",
+  "start_url": "./#lapor",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
@@ -14,6 +14,7 @@
     { "src": "img/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
+    { "name": "Lapor pekerjaan", "url": "./#lapor" },
     { "name": "Gudang", "url": "./#gudang" },
     { "name": "Proyek", "url": "./#proyek" }
   ]

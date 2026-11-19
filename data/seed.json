@@ -1195,91 +1195,117 @@
    "nama": "Sumarko",
    "job": "LAY OUT, CONTROL ASSET",
    "skill": "LAYOUT",
-   "kapasitas": 100
+   "kapasitas": 100,
+   "grup": "Internal",
+   "peran": "Member"
   },
   {
    "nrp": "124",
    "nama": "Eko Nurcahyanto",
    "job": "REPORT, LAY OUT, CONTROL ASSET & KOORDINATOR",
    "skill": "LAYOUT,KOORD",
-   "kapasitas": 100
+   "kapasitas": 100,
+   "grup": "Internal",
+   "peran": "Koordinator"
   },
   {
    "nrp": "426",
    "nama": "Sukiyo",
    "job": "DESIGN ELECTRIC, WIRING & PLC PROGRAMER",
    "skill": "ELEC",
-   "kapasitas": 100
+   "kapasitas": 100,
+   "grup": "Internal",
+   "peran": "Member"
   },
   {
    "nrp": "713",
    "nama": "Nugroho Edy S",
    "job": "DESIGN ELECTRIC, WIRING & PLC PROGRAMER",
    "skill": "ELEC",
-   "kapasitas": 100
+   "kapasitas": 100,
+   "grup": "Internal",
+   "peran": "Member"
   },
   {
    "nrp": "942",
    "nama": "Fajar Sani",
    "job": "DESIGN & ASSY MEKANIK",
    "skill": "MECH",
-   "kapasitas": 100
+   "kapasitas": 100,
+   "grup": "Internal",
+   "peran": "Member"
   },
   {
    "nrp": "943",
    "nama": "Wardiyono",
    "job": "DESIGN & ASSY MEKANIK",
    "skill": "MECH",
-   "kapasitas": 100
+   "kapasitas": 100,
+   "grup": "Global",
+   "peran": "Leader"
   },
   {
    "nrp": "1195",
    "nama": "Muharir",
    "job": "DESIGN & ASSY MEKANIK",
    "skill": "MECH",
-   "kapasitas": 100
+   "kapasitas": 100,
+   "grup": "Internal",
+   "peran": "Member"
   },
   {
    "nrp": "1224",
    "nama": "Chilvi Octafia Rizki",
    "job": "ADMIN",
    "skill": "ADMIN",
-   "kapasitas": 100
+   "kapasitas": 100,
+   "grup": "Internal",
+   "peran": "Member"
   },
   {
    "nrp": "1348",
    "nama": "Teguh Rianto",
    "job": "IOT, AGV & ELECTRIC",
    "skill": "ELEC,IOT",
-   "kapasitas": 100
+   "kapasitas": 100,
+   "grup": "Internal",
+   "peran": "Member"
   },
   {
    "nrp": "1386",
    "nama": "Fahri Wahyu Prastama",
    "job": "AI & PROGRAMER SOFTWARE",
    "skill": "AI",
-   "kapasitas": 100
+   "kapasitas": 100,
+   "grup": "Internal",
+   "peran": "Member"
   },
   {
    "nrp": "16353",
    "nama": "Satria Naufal Jauhari",
    "job": "AI & PROGRAMER SOFTWARE",
    "skill": "AI",
-   "kapasitas": 100
+   "kapasitas": 100,
+   "grup": "Internal",
+   "peran": "Member"
   },
   {
    "nrp": "16355",
    "nama": "Iqbal Fauzan",
    "job": "IOT & AGV",
    "skill": "IOT",
-   "kapasitas": 100
+   "kapasitas": 100,
+   "grup": "Internal",
+   "peran": "Member"
   },
   {
    "nrp": "16359",
    "nama": "Muhammad Zidan Arrizik",
    "job": "WIRING ELECTRIC",
    "skill": "ELEC",
-   "kapasitas": 100
+   "kapasitas": 100,
+   "grup": "Internal",
+   "peran": "Member"
   }
  ],
  "effort": [

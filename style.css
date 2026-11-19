@@ -144,3 +144,33 @@ label.f{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--mu
   nav{order:3;flex-basis:100%;justify-content:space-between}
   nav a{padding:8px 6px 9px;font-size:16px}
 }
+/* lapor */
+.lapor{max-width:640px;margin:0 auto}
+.pbar{height:10px;background:var(--soft);border-radius:5px;margin:8px 0 4px;overflow:hidden}
+.pbar i{display:block;height:100%;border-radius:5px}
+.entries{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.ent{display:grid;grid-template-columns:1fr auto 32px;gap:8px;align-items:center;background:var(--soft);border-radius:8px;padding:8px 10px}
+.ent small{display:block;color:var(--muted);font-size:12px}
+.ent .jam{font:700 18px var(--display)}
+.ent .x{border:0;background:none;color:var(--muted);font-size:15px;cursor:pointer;padding:6px}
+.addp{margin-top:12px;display:flex;flex-direction:column;gap:14px}
+.addp .step{display:flex;flex-direction:column;gap:8px}
+.pick{display:flex;flex-wrap:wrap;gap:6px}
+.pick button{border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:10px;padding:9px 12px;font:500 14px var(--body);cursor:pointer;text-align:left;max-width:100%}
+.pick button small{display:block;font:10.5px var(--mono);color:var(--muted)}
+.pick button.on{background:var(--int);border-color:var(--int);color:#fff}
+.pick button.on small{color:#dfe8f7}
+.pick.nonp button{background:var(--soft)}
+.pick.nonp button.on{background:var(--int)}
+.pick.jam button{min-width:56px;text-align:center;font:700 18px var(--display);padding:10px 12px}
+.pick.big{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.pick.big button{padding:14px;font-size:15px}
+@media (max-width:640px){nav a{padding:8px 4px 9px;font-size:15px}}
+.pick.task button{background:var(--warn-soft);border-color:var(--warn-soft)}
+.pick.task button.on{background:var(--int);border-color:var(--int);color:#fff}
+@media (max-width:640px){nav a{padding:8px 3px 9px;font-size:14.5px}}
+.daily{display:flex;flex-direction:column;gap:10px}
+.dm{border-bottom:1px solid var(--line);padding-bottom:8px}
+.dr{display:flex;justify-content:space-between;gap:10px;padding:3px 0 3px 10px;font-size:13.5px;border-left:3px solid var(--int);margin-top:4px}
+.dr.ins{border-left-color:var(--glb)}
+.dr small{display:block;color:var(--muted);font-size:11.5px}

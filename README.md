@@ -75,8 +75,38 @@ Tab *Actions* → *Deploy Apps Script* → *Run workflow*. Setelah hijau, buka r
 Edit `config.js`, isi `API_URL` dengan URL dari langkah 5, lalu commit.
 Buka aplikasi. Database masih kosong, jadi akan muncul tombol **Import data awal**.
 
-**7. Atur PIN**
-Saat pertama dipanggil, Apps Script membuat Google Sheet **"PSP Dashboard — Database"** di Drive Anda. Buka tab `Config` dan isi baris `PIN`. PIN ini dipakai untuk menyimpan perubahan. Tanpa PIN, aplikasi hanya bisa dibaca.
+**7. Atur PIN (2 macam)**
+Saat pertama dipanggil, Apps Script membuat Google Sheet **"PSP Dashboard — Database"** di Drive Anda. Buka tab `Config`:
+- `PIN` = PIN admin, untuk mengubah proyek, gudang, dan data master.
+- `PIN_TIM` = PIN untuk semua anggota tim, khusus untuk mengisi laporan harian (menu **Lapor**). Cukup dimasukkan sekali di HP masing-masing.
+
+Tanpa PIN, aplikasi hanya bisa dibaca.
+
+## Tugas mingguan (menu Tugas)
+
+- Setiap orang boleh membuat tugas untuk dirinya sendiri.
+- **Koordinator** (kolom `peran` = `Koordinator` di tab Members) bisa membuat tugas untuk semua anggota. **Leader** (`peran` = `Leader`) untuk anggota satu `grup` (`Internal` / `Global`).
+- Status diketuk bergantian: Rencana → Proses → Selesai. Tugas yang belum selesai bisa dibawa ke minggu berikutnya dengan satu tombol.
+- Di menu Lapor, tugas minggu ini muncul paling atas; jam yang dilaporkan tercatat ke tugas itu.
+- Ringkasan menampilkan tugas lewat target dan siapa yang belum punya rencana minggu ini.
+
+Pembagian awal: Pak Eko = Koordinator (Internal), Pak Wardiyono = Leader Global, lainnya Member Internal. Ubah kapan saja di tab Members (kolom `grup` dan `peran`).
+
+## Laporan harian tim (menu Lapor)
+
+Pengganti format laporan Excel. Dibuat supaya bisa diisi dari HP dalam ±30 detik:
+1. Pertama kali: pilih nama sendiri dan masukkan PIN tim (HP mengingat keduanya).
+2. Setiap hari: **+ Tambah pekerjaan** → ketuk proyek → ketuk jam → (tahap) → Simpan. Proyek yang sering dikerjakan muncul paling atas.
+3. Kalau pekerjaannya sama dengan kemarin: satu tombol **Sama seperti kemarin**.
+
+Admin: buka **Laporan tim** di bawah menu Lapor:
+- **Harian** → tombol **Salin untuk WA / email**: teks Daily Job siap tempel untuk atasan (⚡ = pekerjaan insidentil, lengkap dengan peminta).
+- **Mingguan** → **Download paket mingguan (ZIP)**: 1 folder berisi `00_REKAP` + 1 file Excel per orang. Extract langsung ke folder server.
+- **Bulanan** → Excel rekap WLA sebulan.
+
+Pekerjaan insidentil (Support genba, Support PICA, Perbaikan) dicatat terpisah lengkap dengan **siapa yang meminta**, supaya terlihat berapa persen waktu tim terpakai di luar rencana proyek.
+
+Aplikasi yang dipasang di HP langsung terbuka di menu Lapor. Di Ringkasan, nama yang belum lapor hari kerja terakhir muncul di "Perlu perhatian".
 
 ## Sehari-hari
 
