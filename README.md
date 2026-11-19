@@ -92,6 +92,16 @@ Klik satu proyek di menu Proyek → halaman detail:
 
 Data tahapan disimpan di tab `Stages`.
 
+## Member: tambah, edit, mutasi
+
+Menu Loading → **👥 Kelola member** (PIN admin):
+- **+ Member baru**: NRP, nama, skill, grup (Internal/Global), peran (Member/Leader/Koordinator)
+- **Edit → Proses mutasi**: member dinonaktifkan, semua alokasi proyek & tugas yang belum selesai pindah ke pengganti. Riwayat laporan tetap ada (masih muncul di rekap periode lama).
+
+## Laporan tim → server perusahaan
+
+Ringkasan → **📦 Laporan tim** → tab **Mingguan** → **Download paket mingguan (ZIP)** → extract → copy folder `LAPORAN_PSP_<tanggal Senin>` ke server.
+
 ## Daily Job
 
 Ringkasan → tombol **📋 Daily Job hari ini** → teks siap kirim (bisa diedit) → **Salin** atau **Buka WhatsApp**.

@@ -27,6 +27,7 @@ const active = (p, m) => !OFF.includes(p.status) && p.mulai && p.selesai && p.mu
 const late = p => p.selesai && p.selesai < CUR && !DONE.includes(p.status) && !OFF.includes(p.status);
 const team = p => String(p.tim || '').split(/[,;]/).map(x => x.trim()).filter(Boolean).map(x => { const [n, pct] = x.split(':'); return { nrp: n.trim(), pct: num(pct || 20) }; });
 const member = n => S.M.find(m => String(m.nrp) === String(n));
+const isAct = m => String(m.aktif || '').trim().toLowerCase() !== 'tidak';
 const short = n => { const p = String(n || '').split(' '); return p[0] === 'Muhammad' ? p[1] : p[0]; };
 
 /* ---------- data ---------- */
@@ -56,6 +57,7 @@ async function load() {
     }
     S.P = (d.Projects || []).map(p => ({ ...p, qty: num(p.qty) || 1, budget: num(p.budget), saveMP: num(p.saveMP), mulai: ym(p.mulai), selesai: ym(p.selesai) }));
     S.M = (d.Members || []).map(m => ({ ...m, nrp: String(m.nrp), kapasitas: num(m.kapasitas) || 100 }));
+    S.MA = S.M.filter(isAct);
     S.E = d.Effort || [];
     S.I = (d.Items || []).map(i => ({ ...i, stok: num(i.stok), minStok: num(i.minStok) }));
     S.MV = d.Moves || [];
@@ -75,6 +77,9 @@ function demoApi(a, p) {
   if (a === 'remove') { const arr = tabs[p.tab]; const i = arr.findIndex(x => x.id === p.id); if (i >= 0) arr.splice(i, 1); return { ok: true }; }
   if (a === 'move') { const it = S.I.find(x => x.id === p.itemId); const ak = p.jenis === 'IN' ? it.stok + num(p.qty) : it.stok - num(p.qty); if (ak < 0) throw new Error('Stok tidak cukup (sisa ' + it.stok + ')'); it.stok = ak; S.MV.push({ id: 'mv' + Date.now(), waktu: new Date().toISOString(), ...p, stokAkhir: ak }); return { ok: true }; }
   if (a === 'report') { const rows = p.rows.map(r => ({ ...r, id: 'rp' + Math.random().toString(36).slice(2, 8) })); S.R.push(...rows); return { ok: true, rows }; }
+  if (a === 'transfer') { const m = S.M.find(x => x.nrp === p.from); if (m) m.aktif = 'Tidak'; let np = 0, nt = 0;
+    S.P.forEach(pr => { const t = team(pr); if (!t.some(x => x.nrp === p.from)) return; np++; const out = {}; t.forEach(x => { const k = x.nrp === p.from ? p.to : x.nrp; if (k) out[k] = (out[k] || 0) + x.pct; }); pr.tim = Object.entries(out).map(([k, v]) => k + ':' + v).join(', '); });
+    S.T.forEach(t => { if (t.nrp === p.from && t.status !== 'Selesai' && p.to) { t.nrp = p.to; nt++; } }); return { ok: true, projects: np, tasks: nt }; }
   if (a === 'stages') { S.ST = S.ST.filter(x => x.projectId !== p.projectId).concat(p.rows.map((r, i) => ({ ...r, id: 'st' + i + Date.now(), projectId: p.projectId }))); return { ok: true }; }
   if (a === 'task') { const r = { ...p.row, id: p.row.id || 'tk' + Math.random().toString(36).slice(2, 8) }; const i = S.T.findIndex(t => t.id === r.id); i >= 0 ? S.T[i] = r : S.T.push(r); return { ok: true, row: r }; }
   if (a === 'untask') { S.T = S.T.filter(t => t.id !== p.id); return { ok: true }; }
@@ -131,7 +136,7 @@ function demand() { // orang yang dibutuhkan per bulan, dipisah Internal / Globa
   }
   return out;
 }
-function supply() { const o = {}; Object.keys(SK).forEach(k => o[k] = 0); for (const m of S.M) { const sk = String(m.skill || '').split(/[,;]/).map(s => s.trim().toUpperCase()).filter(Boolean); if (!sk.length) continue; sk.forEach(s => { if (o[s] !== undefined) o[s] += (m.kapasitas / 100) / sk.length; }); } return o; }
+function supply() { const o = {}; Object.keys(SK).forEach(k => o[k] = 0); for (const m of S.MA) { const sk = String(m.skill || '').split(/[,;]/).map(s => s.trim().toUpperCase()).filter(Boolean); if (!sk.length) continue; sk.forEach(s => { if (o[s] !== undefined) o[s] += (m.kapasitas / 100) / sk.length; }); } return o; }
 
 /* ---------- router ---------- */
 function render() {
@@ -139,7 +144,7 @@ function render() {
   document.querySelectorAll('#nav a').forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + r));
   window.scrollTo(0, 0);
   if (r === 'proyek' && arg) return vProjDetail(decodeURIComponent(arg));
-  ({ dashboard: vDash, lapor: vLapor, tugas: vTugas, proyek: vProj, loading: vLoad, gudang: vGudang }[r] || vDash)();
+  ({ dashboard: vDash, laporan: vLaporan, lapor: vLapor, tugas: vTugas, proyek: vProj, loading: vLoad, gudang: vGudang }[r] || vDash)();
 }
 window.addEventListener('hashchange', render);
 
@@ -150,9 +155,10 @@ function vDash() {
   const gAct = glb.filter(p => !OFF.includes(p.status) && !DONE.includes(p.status));
   const sup = supply(), cap = Object.values(sup).reduce((a, b) => a + b, 0), dm = demand();
   const peak = Math.max(...months().map((m, i) => dm.Internal[i] + dm.Global[i]));
-  const over = S.M.filter(m => loadOf(m.nrp, CUR).t > m.kapasitas);
+  const over = S.MA.filter(m => loadOf(m.nrp, CUR).t > m.kapasitas);
   const low = S.I.filter(i => i.stok <= i.minStok);
   $('#view').innerHTML = `<div class="toolbar" style="margin-bottom:10px"><h2 style="margin:0">Ringkasan</h2><span class="grow"></span><button class="btn pri" id="dj">📋 Daily Job ${isWork(today()) ? 'hari ini' : esc(dlabel(lastWorkday()))}</button></div>
+  <div class="toolbar" style="margin:-4px 0 10px;justify-content:flex-end"><a class="btn" href="#laporan" id="dw">📦 Laporan tim (harian / mingguan / bulanan)</a></div>
   <div class="tiles">
     <div class="tile"><div class="k">KPI Reduce MP</div><div class="v num">${fmt(real)}<small> / ${fmt(plan)} plan · target ${fmt(target)}</small></div><div class="s">${target - plan > 0 ? `Gap <b style="color:var(--bad)">${fmt(target - plan)} MP</b> belum ada proyeknya` : 'Plan sudah menutup target'}</div></div>
     <div class="tile"><div class="k">Support Global aktif</div><div class="v num">${gAct.length}<small> request</small></div><div class="s">IDR ${fmt(gAct.reduce((a, p) => a + p.budget, 0))} Mio · ${gAct.filter(p => !EARLY.includes(p.status)).length} sudah PO</div></div>
@@ -176,14 +182,14 @@ function attention(over, low) {
   const a = [];
   over.forEach(m => a.push(`<button class="li" style="--c:var(--bad)" data-go="#loading"><span><b>${esc(m.nama)}</b> loading ${loadOf(m.nrp, CUR).t}% bulan ini<small>${loadOf(m.nrp, CUR).list.length} proyek bersamaan</small></span></button>`));
   S.P.filter(late).forEach(p => a.push(`<button class="li" style="--c:var(--warn)" data-p="${esc(p.id)}"><span><b>Terlambat:</b> ${esc(p.nama)}<small>${esc(p.kode)} · selesai ${mName(p.selesai)} · ${esc(p.status)}</small></span></button>`));
-  const lw = lastWorkday(), miss = S.M.filter(m => !/ADMIN/.test(m.skill) && !S.R.some(r => r.nrp === m.nrp && r.tanggal === lw));
-  if (S.M.length && miss.length) a.push(`<button class="li" style="--c:var(--warn)" data-go="#lapor"><span><b>Belum lapor ${esc(dlabel(lw))}:</b> ${miss.length} orang<small>${esc(miss.map(m => short(m.nama)).join(', '))}</small></span></button>`);
-  const wk = weekOf(today()), noPlan = S.M.filter(m => !/ADMIN/.test(m.skill) && !S.T.some(t => t.nrp === m.nrp && t.minggu === wk));
+  const lw = lastWorkday(), miss = S.MA.filter(m => !/ADMIN/.test(m.skill) && !S.R.some(r => r.nrp === m.nrp && r.tanggal === lw));
+  if (S.MA.length && miss.length) a.push(`<button class="li" style="--c:var(--warn)" data-go="#lapor"><span><b>Belum lapor ${esc(dlabel(lw))}:</b> ${miss.length} orang<small>${esc(miss.map(m => short(m.nama)).join(', '))}</small></span></button>`);
+  const wk = weekOf(today()), noPlan = S.MA.filter(m => !/ADMIN/.test(m.skill) && !S.T.some(t => t.nrp === m.nrp && t.minggu === wk));
   const lateT = S.T.filter(t => t.status !== 'Selesai' && t.target && t.target < today());
   const wRs = S.R.filter(r => r.tanggal >= wk), wTot = wRs.reduce((x, r) => x + r.jam, 0), wIns = wRs.filter(INS).reduce((x, r) => x + r.jam, 0);
   if (wIns) a.push(`<button class="li" style="--c:var(--glb)" data-go="#lapor"><span><b>Insidentil minggu ini: ${fmt(wIns, 1)} jam (${fmt(wIns / wTot * 100)}%)</b><small>support genba, PICA, perbaikan di luar rencana proyek</small></span></button>`);
   if (lateT.length) a.push(`<button class="li" style="--c:var(--bad)" data-go="#tugas"><span><b>${lateT.length} tugas lewat target</b><small>${esc([...new Set(lateT.map(t => short(member(t.nrp)?.nama)))].join(', '))}</small></span></button>`);
-  if (S.M.length && noPlan.length) a.push(`<button class="li" style="--c:var(--warn)" data-go="#tugas"><span><b>Belum ada rencana minggu ini:</b> ${noPlan.length} orang<small>${esc(noPlan.map(m => short(m.nama)).join(', '))}</small></span></button>`);
+  if (S.MA.length && noPlan.length) a.push(`<button class="li" style="--c:var(--warn)" data-go="#tugas"><span><b>Belum ada rencana minggu ini:</b> ${noPlan.length} orang<small>${esc(noPlan.map(m => short(m.nama)).join(', '))}</small></span></button>`);
   low.forEach(i => a.push(`<button class="li" style="--c:var(--int)" data-i="${esc(i.id)}"><span><b>${i.stok <= 0 ? 'Habis' : 'Stok menipis'}:</b> ${esc(i.nama)}<small>sisa ${fmt(i.stok)} ${esc(i.satuan)} · minimal ${fmt(i.minStok)}</small></span></button>`));
   return a.join('') || '<p class="muted">Tidak ada yang perlu ditindaklanjuti.</p>';
 }
@@ -243,7 +249,7 @@ function projForm(id) {
       <div class="f2"><label class="f">Budget / nilai (IDR Mio)<input name="budget" type="number" step="0.1" value="${p.budget}"></label>${p.jenis === 'Global' ? `<label class="f">Qty unit<input name="qty" type="number" min="1" value="${p.qty}"></label>` : `<label class="f">Save MP<input name="saveMP" type="number" min="0" value="${p.saveMP}"></label>`}</div>
       <div class="f2"><label class="f">Tipe proyek (untuk hitung kebutuhan MP)<select name="tipe">${S.E.map(e => `<option value="${esc(e.kode)}" ${e.kode === p.tipe ? 'selected' : ''}>${esc(e.kode)}. ${esc(e.nama)}</option>`).join('')}</select></label><label class="f">Dikerjakan<select name="mode">${['In-house', 'Vendor'].map(m => `<option ${p.mode === m ? 'selected' : ''}>${m}</option>`).join('')}</select></label></div>
       <div><div class="muted" style="font-size:12px;font-weight:500;margin-bottom:5px">Tim PSP & % waktu per bulan</div>
-        ${tm.map((t, i) => `<div class="teamrow"><select data-tn="${i}">${S.M.map(m => `<option value="${esc(m.nrp)}" ${m.nrp === t.nrp ? 'selected' : ''}>${esc(m.nama)}</option>`).join('')}</select><input type="number" data-tp="${i}" min="0" max="200" step="5" value="${t.pct}"><button type="button" class="btn" data-tx="${i}" aria-label="Hapus">✕</button></div>`).join('')}
+        ${tm.map((t, i) => `<div class="teamrow"><select data-tn="${i}">${S.MA.concat(S.M.filter(m => !isAct(m) && m.nrp === t.nrp)).map(m => `<option value="${esc(m.nrp)}" ${m.nrp === t.nrp ? 'selected' : ''}>${esc(m.nama)}</option>`).join('')}</select><input type="number" data-tp="${i}" min="0" max="200" step="5" value="${t.pct}"><button type="button" class="btn" data-tx="${i}" aria-label="Hapus">✕</button></div>`).join('')}
         <button type="button" class="btn" id="tAdd">+ Member</button></div>
       <label class="f">PIC di luar PSP<input name="picLuar" value="${esc(p.picLuar)}"></label>
       <label class="f">Catatan / next action<textarea name="catatan" rows="2">${esc(p.catatan)}</textarea></label>
@@ -254,7 +260,7 @@ function projForm(id) {
   const collect = () => { const fd = new FormData($('#pf')); for (const [k, v] of fd) p[k] = ['budget', 'saveMP', 'qty'].includes(k) ? num(v) : v; tm = tm.map((t, i) => ({ nrp: document.querySelector(`[data-tn="${i}"]`).value, pct: num(document.querySelector(`[data-tp="${i}"]`).value) })); };
   const bind = () => {
     $('#pf [name=jenis]').onchange = () => { collect(); draw(); };
-    $('#tAdd').onclick = () => { collect(); tm.push({ nrp: S.M[0]?.nrp, pct: 20 }); draw(); };
+    $('#tAdd').onclick = () => { collect(); tm.push({ nrp: S.MA[0]?.nrp, pct: 20 }); draw(); };
     document.querySelectorAll('[data-tx]').forEach(b => b.onclick = () => { collect(); tm.splice(+b.dataset.tx, 1); draw(); });
     $('#pf').onsubmit = async e => { e.preventDefault(); collect(); if (p.mulai && p.selesai && p.selesai < p.mulai) return toast('Bulan selesai sebelum bulan mulai');
       p.tim = tm.map(t => t.nrp + ':' + t.pct).join(', '); $('#sv').disabled = true;
@@ -267,18 +273,19 @@ function projForm(id) {
 
 /* ---------- LOADING MP ---------- */
 function vLoad() {
+  setTimeout(() => { const b = $('#mgBtn'); if (b) b.onclick = () => memberList(); }, 0);
   const M = months(), ci = M.indexOf(CUR), sup = supply(), dm = demand();
-  $('#view').innerHTML = `<h2>Loading member per bulan</h2>
+  $('#view').innerHTML = `<div class="toolbar"><h2 style="margin:0">Loading member per bulan</h2><span class="grow"></span><button class="btn" id="mgBtn">👥 Kelola member</button></div>
   <p class="muted" style="margin:-6px 0 10px;font-size:13px">% = jumlah alokasi dari semua proyek aktif bulan itu (atur di form proyek). Merah = di atas 100%.</p>
   <div class="tbl" style="padding:10px"><table class="heat"><thead><tr><th></th>${M.map((m, i) => `<th class="mono" style="font-size:11px;${i === ci ? 'color:var(--accent)' : ''}">${MLBL[+m.slice(5) - 1]}</th>`).join('')}</tr></thead><tbody>
-  ${S.M.map(m => `<tr><td class="n"><b>${esc(m.nama)}</b><small>${esc(m.nrp)} · ${esc(m.skill)}</small></td>${M.map((mo, i) => { const l = loadOf(m.nrp, mo); return `<td><div class="hc ${lvl(l.t, m.kapasitas)} ${i === ci ? 'cur' : ''}" title="${esc(l.list.map(x => x[0].kode + ' ' + x[1] + '%').join('\n'))}">${l.t || ''}</div></td>`; }).join('')}</tr>`).join('')}
+  ${S.MA.map(m => `<tr><td class="n"><b>${esc(m.nama)}</b><small>${esc(m.nrp)} · ${esc(m.skill)}</small></td>${M.map((mo, i) => { const l = loadOf(m.nrp, mo); return `<td><div class="hc ${lvl(l.t, m.kapasitas)} ${i === ci ? 'cur' : ''}" title="${esc(l.list.map(x => x[0].kode + ' ' + x[1] + '%').join('\n'))}">${l.t || ''}</div></td>`; }).join('')}</tr>`).join('')}
   </tbody></table></div>
   <div class="panel" style="margin-top:14px"><h3>Kebutuhan vs orang yang ada per skill (rata-rata setahun)</h3>
     <div class="legend"><span><i class="sw i"></i>Internal</span><span><i class="sw g"></i>Global</span><span><i class="sw l" style="border-top-style:solid"></i>Orang yang ada</span></div>
     <div class="skills">${Object.keys(SK).map(k => { const a = dm.skill[k].Internal, b = dm.skill[k].Global, need = a + b, have = sup[k], mx = Math.max(...Object.keys(SK).map(x => dm.skill[x].Internal + dm.skill[x].Global), ...Object.values(sup), 1) * 1.05;
       return `<div class="sk"><b>${SK[k]}</b><div class="skbar">${a > 0 ? `<i style="width:${a / mx * 100}%;background:var(--int)"></i>` : ''}${b > .05 ? `<i style="width:${b / mx * 100}%;background:var(--glb)"></i>` : ''}<span class="cap" style="left:${have / mx * 100}%"></span></div>
       <div class="r" style="color:${need > have * 1.15 ? 'var(--bad)' : 'var(--ok)'}">${fmt(need, 1)}<small>ada ${fmt(have, 1)} · ${need > have ? 'kurang ' + fmt(need - have, 1) : 'cukup'}</small></div></div>`; }).join('')}</div>
-    <p class="muted" style="font-size:12px;margin:10px 0 0">Member, skill dan standar effort diedit langsung di Google Sheet (tab Members dan Effort).</p></div>`;
+    <p class="muted" style="font-size:12px;margin:10px 0 0">Member ditambah/diedit/dimutasi lewat tombol 👥 Kelola member. Standar effort per tipe proyek diedit di Google Sheet tab Effort.</p></div>`;
 }
 
 /* ---------- GUDANG (katalog) ---------- */
@@ -404,7 +411,7 @@ function vLapor() {
   const me = member(getMe());
   if (!me) {
     $('#view').innerHTML = `<h2>Siapa kamu?</h2><p class="muted" style="margin-top:-6px">Pilih sekali saja. HP ini akan mengingatnya.</p>
-      <div class="pick big">${S.M.map(m => `<button data-me="${esc(m.nrp)}">${esc(m.nama)}<small>${esc(m.nrp)}</small></button>`).join('')}</div>`;
+      <div class="pick big">${S.MA.map(m => `<button data-me="${esc(m.nrp)}">${esc(m.nama)}<small>${esc(m.nrp)}</small></button>`).join('')}</div>`;
     document.querySelectorAll('[data-me]').forEach(b => b.onclick = () => { setMe(b.dataset.me); vLapor(); });
     return;
   }
@@ -422,7 +429,7 @@ function vLapor() {
       ${!mine.length && prevRows.length ? `<button class="btn" id="lpCopy" style="width:100%;margin-top:10px">↻ Sama seperti ${esc(dlabel(prev))} (${prevRows.length} pekerjaan, ${fmt(prevRows.reduce((a, r) => a + r.jam, 0), 1)} jam)</button>` : ''}
     </div>
     <div id="lpAdd">${addForm(me, target - tot)}</div>
-    <details class="panel" style="margin-top:14px" id="lpTeam"><summary><b>Laporan tim: harian, mingguan, bulanan</b> <span class="muted">(Daily Job, server, WLA)</span></summary><div id="lpTeamBody"></div></details>
+    <a class="btn" href="#laporan" style="display:block;text-align:center;margin-top:14px">📦 Laporan tim: harian, mingguan, bulanan →</a>
   </div>`;
   $('#lpWho').onclick = () => { setMe(''); vLapor(); };
   document.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { L.tgl = b.dataset.d; L.add = null; vLapor(); });
@@ -430,7 +437,6 @@ function vLapor() {
   document.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => { const r = await teamSend('unreport', { id: b.dataset.del, nrp: me.nrp }); if (r) { S.R = S.R.filter(x => x.id !== b.dataset.del); vLapor(); } });
   const cp = $('#lpCopy'); if (cp) cp.onclick = () => save(prevRows.map(r => ({ kode: r.kode, kategori: r.kategori, tahap: r.tahap, uraian: r.uraian, jam: r.jam, status: r.status, peminta: r.peminta || '' })));
   bindAdd(me, target - tot);
-  $('#lpTeam').ontoggle = () => { if ($('#lpTeam').open) teamPanel(); };
   async function save(rows) {
     const r = await teamSend('report', { rows: rows.map(x => ({ ...x, tanggal: L.tgl, nrp: me.nrp, nama: me.nama })) });
     if (r) { if (!DEMO) S.R.push(...r.rows.map(x => ({ ...x, nrp: String(x.nrp), jam: num(x.jam) }))); L.add = null; toast('Tersimpan ✓'); vLapor(); }
@@ -498,7 +504,7 @@ function periodOf(mode, ref) {
 }
 function stats(pr) {
   const days = []; let d = pr.from; while (d <= pr.to) { if (isWork(d) && d <= today()) days.push(d); d = addDays(d, 1); }
-  return S.M.filter(m => !/ADMIN/.test(m.skill)).map(m => {
+  return S.M.filter(m => !/ADMIN/.test(m.skill) && (isAct(m) || S.R.some(r => r.nrp === m.nrp && r.tanggal >= pr.from && r.tanggal <= pr.to))).map(m => {
     const rs = S.R.filter(r => r.nrp === m.nrp && r.tanggal >= pr.from && r.tanggal <= pr.to).sort((a, b) => a.tanggal.localeCompare(b.tanggal)), jam = rs.reduce((a, r) => a + r.jam, 0);
     const g = {}; rs.forEach(r => { const k = KELOMPOK[r.kategori] || 'Lain-lain'; g[k] = (g[k] || 0) + r.jam; });
     const filled = days.filter(x => rs.some(r => r.tanggal === x)).length, jk = days.length * JAM_HARI();
@@ -506,6 +512,12 @@ function stats(pr) {
   });
 }
 const RP = S.rp = { mode: 'hari', ref: null };
+function vLaporan() {
+  $('#view').innerHTML = `<div class="lapor" style="max-width:900px"><h2>Laporan tim</h2>
+    <p class="muted" style="margin:-6px 0 6px;font-size:13px"><b>Harian</b> = Daily Job untuk atasan · <b>Mingguan</b> = paket ZIP untuk server perusahaan · <b>Bulanan</b> = rekap WLA</p>
+    <div class="panel" id="lpTeamBody"></div></div>`;
+  teamPanel();
+}
 function teamPanel() {
   RP.ref = RP.ref || (isWork(today()) ? today() : lastWorkday());
   const pr = periodOf(RP.mode, RP.ref), st = stats(pr), tot = st.reduce((a, x) => a + x.jam, 0), ins = st.reduce((a, x) => a + (x.g.Support || 0), 0), proj = st.reduce((a, x) => a + (x.g.Proyek || 0), 0);
@@ -590,7 +602,7 @@ const TW = S.tw = { wk: null, all: false, form: null };
 function vTugas() {
   const me = member(getMe()); TW.wk = TW.wk || weekOf(today());
   const lead = me && (me.peran === 'Koordinator' || me.peran === 'Leader');
-  const people = S.M.filter(m => !/ADMIN/.test(m.skill)).filter(m => TW.all || !me || lead ? (me && me.peran === 'Leader' && !TW.all ? m.grup === me.grup : true) : m.nrp === me.nrp);
+  const people = S.MA.filter(m => !/ADMIN/.test(m.skill)).filter(m => TW.all || !me || lead ? (me && me.peran === 'Leader' && !TW.all ? m.grup === me.grup : true) : m.nrp === me.nrp);
   const fri = addDays(TW.wk, 4), lastWk = addDays(TW.wk, -7);
   $('#view').innerHTML = `<div class="lapor" style="max-width:860px">
     <div class="toolbar"><h2 style="margin:0">Tugas minggu ini</h2><span class="grow"></span>
@@ -744,6 +756,54 @@ function bindStageEditor(p) {
     const out = rows.map((r, i) => ({ urut: i + 1, tahap: r.tahap.trim(), mulaiPlan: r.mulaiPlan, selesaiPlan: r.selesaiPlan, mulaiAkt: r.mulaiAkt, selesaiAkt: r.selesaiAkt, progress: num(r.progress), catatan: r.catatan || '' }));
     $('#stSave').disabled = true; const res = await teamSend('stages', { projectId: p.id, rows: out }); $('#stSave').disabled = false;
     if (res) { if (!DEMO) S.ST = S.ST.filter(x => x.projectId !== p.id).concat((res.rows || out).map(r => ({ ...r, projectId: p.id }))); PD.edit = false; PD.rows = null; toast('Tahapan tersimpan'); vProjDetail(p.id); } };
+}
+
+
+async function refreshAll() { if (DEMO) { S.MA = S.M.filter(isAct); render(); } else await load(); }
+/* ---------- KELOLA MEMBER: tambah, edit, mutasi + pengganti ---------- */
+const SKILL_ALL = ['MECH', 'ELEC', 'AI', 'IOT', 'LAYOUT', 'KOORD', 'ADMIN'];
+function memberList() {
+  const rows = S.M.slice().sort((a, b) => (isAct(b) - isAct(a)) || String(a.nama).localeCompare(b.nama));
+  openModal(`<div class="hd"><div><small class="muted mono">PIN ADMIN</small><h2>Kelola member PSP</h2></div><button class="btn" data-close>✕</button></div>
+  <div class="bd"><button class="btn pri" id="mgNew">+ Member baru</button>
+    <div class="entries">${rows.map(m => `<div class="ent" style="grid-template-columns:1fr auto;${isAct(m) ? '' : 'opacity:.55'}"><div><b>${esc(m.nama)}</b><small>${esc(m.nrp)} · ${esc(m.skill || '')} · ${esc(m.grup || 'Internal')}${m.peran && m.peran !== 'Member' ? ' · ' + esc(m.peran) : ''}${isAct(m) ? '' : ' · <b>nonaktif</b>'}</small></div><button class="btn" data-me2="${esc(m.nrp)}">Edit</button></div>`).join('')}</div></div>`, () => {
+    $('#mgNew').onclick = () => memberForm(null);
+    document.querySelectorAll('[data-me2]').forEach(b => b.onclick = () => memberForm(b.dataset.me2));
+  });
+}
+function memberForm(nrp) {
+  const ex = member(nrp), m = ex ? { ...ex } : { nrp: '', nama: '', job: '', skill: '', kapasitas: 100, grup: 'Internal', peran: 'Member', aktif: '' };
+  const sk = String(m.skill || '').split(/[,;]/).map(x => x.trim().toUpperCase());
+  const projs = ex ? S.P.filter(p => team(p).some(t => t.nrp === ex.nrp)) : [];
+  const openT = ex ? S.T.filter(t => t.nrp === ex.nrp && t.status !== 'Selesai').length : 0;
+  openModal(`<form id="mf2"><div class="hd"><div><small class="muted mono">${ex ? 'EDIT MEMBER' : 'MEMBER BARU'}</small><h2>${esc(m.nama || 'Member baru')}</h2></div><button type="button" class="btn" data-close>✕</button></div>
+  <div class="bd">
+    <div class="f2"><label class="f">NRP<input name="nrp" required value="${esc(m.nrp)}" ${ex ? 'readonly' : ''}></label><label class="f">Nama<input name="nama" required value="${esc(m.nama)}"></label></div>
+    <label class="f">Job & skill (teks bebas)<input name="job" value="${esc(m.job || '')}" placeholder="contoh: DESIGN & ASSY MEKANIK"></label>
+    <div><div class="muted" style="font-size:12px;font-weight:500;margin-bottom:5px">Skill (untuk hitung kapasitas per bidang)</div><div class="pick">${SKILL_ALL.map(k => `<label style="display:flex;gap:5px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:13px"><input type="checkbox" data-sk="${k}" style="width:auto" ${sk.includes(k) ? 'checked' : ''}>${k}</label>`).join('')}</div></div>
+    <div class="f2"><label class="f">Grup<select name="grup">${['Internal', 'Global'].map(g => `<option ${m.grup === g ? 'selected' : ''}>${g}</option>`).join('')}</select></label><label class="f">Peran<select name="peran">${['Member', 'Leader', 'Koordinator'].map(g => `<option ${(m.peran || 'Member') === g ? 'selected' : ''}>${g}</option>`).join('')}</select></label></div>
+    <div class="f2"><label class="f">Kapasitas (%)<input name="kapasitas" type="number" min="0" max="200" step="10" value="${m.kapasitas}"></label><label class="f">Status<select name="aktif"><option value="" ${isAct(m) ? 'selected' : ''}>Aktif</option><option value="Tidak" ${isAct(m) ? '' : 'selected'}>Nonaktif</option></select></label></div>
+    ${ex && isAct(ex) ? `<div class="panel" style="background:var(--soft);padding:12px"><b>Mutasi / keluar dari PSP</b>
+      <p class="muted" style="margin:4px 0 8px;font-size:13px">Saat ini PIC di ${projs.length} proyek dan punya ${openT} tugas belum selesai. Riwayat laporannya tetap tersimpan.</p>
+      <div class="f2"><label class="f">Pengganti<select id="mvTo"><option value="">— tanpa pengganti (hapus dari tim proyek) —</option>${S.MA.filter(x => x.nrp !== ex.nrp).map(x => `<option value="${esc(x.nrp)}">${esc(x.nama)}</option>`).join('')}</select></label><div style="display:flex;align-items:flex-end"><button type="button" class="btn danger" id="mvGo" style="width:100%">Proses mutasi</button></div></div>
+      <p class="muted" style="margin:6px 0 0;font-size:12px">Member dinonaktifkan; alokasi proyek & tugas yang belum selesai dipindah ke pengganti. Untuk pengganti baru, tambahkan dulu lewat "+ Member baru".</p></div>` : ''}
+    <div id="cf"></div></div>
+  <div class="ft"><button class="btn pri" id="mSave">Simpan</button><button type="button" class="btn" id="mBack" style="margin-left:auto">Kembali</button></div></form>`, () => {
+    $('#mBack').onclick = memberList;
+    $('#mf2').onsubmit = async e => { e.preventDefault(); const fd = Object.fromEntries(new FormData(e.target));
+      const row = { ...m, ...fd, nrp: String(fd.nrp || m.nrp).trim(), skill: [...document.querySelectorAll('#mf2 [data-sk]')].filter(c => c.checked).map(c => c.dataset.sk).join(','), kapasitas: num(fd.kapasitas) || 100 };
+      if (!ex && member(row.nrp)) return toast('NRP sudah terdaftar');
+      if (!row.nrp || !row.nama.trim()) return toast('NRP dan nama wajib diisi');
+      $('#mSave').disabled = true; const r = await write('save', { tab: 'Members', row }); $('#mSave').disabled = false;
+      if (r) { toast('Member tersimpan'); closeModal(); await refreshAll(); memberList(); } };
+    const mv = $('#mvGo'); if (mv) mv.onclick = () => {
+      const to = $('#mvTo').value, toN = to ? member(to).nama : 'tanpa pengganti';
+      $('#cf').innerHTML = `<div class="confirm">Mutasi <b>${esc(ex.nama)}</b> → ${esc(toN)}? ${projs.length} proyek & ${openT} tugas akan dipindah. <button type="button" class="btn danger" id="mvY">Ya, proses</button><button type="button" class="btn" id="mvN">Batal</button></div>`;
+      $('#mvN').onclick = () => $('#cf').innerHTML = '';
+      $('#mvY').onclick = async () => { $('#mvY').disabled = true; const r = await write('transfer', { from: ex.nrp, to });
+        if (r) { toast(`Selesai: ${r.projects} proyek, ${r.tasks} tugas dipindah`); closeModal(); await refreshAll(); memberList(); } else $('#mvY').disabled = false; };
+    };
+  });
 }
 
 /* ---------- aplikasi HP (PWA) ---------- */

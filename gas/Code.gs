@@ -9,7 +9,7 @@
 
 var TABS = {
   Projects: ['id', 'jenis', 'kode', 'nama', 'customer', 'qty', 'status', 'mulai', 'selesai', 'budget', 'saveMP', 'tipe', 'mode', 'tim', 'picLuar', 'catatan', 'updatedAt'],
-  Members:  ['nrp', 'nama', 'job', 'skill', 'kapasitas', 'grup', 'peran'],
+  Members:  ['nrp', 'nama', 'job', 'skill', 'kapasitas', 'grup', 'peran', 'aktif'],
   Effort:   ['kode', 'nama', 'MECH', 'ELEC', 'AI', 'IOT', 'LAYOUT'],
   Items:    ['id', 'sku', 'nama', 'kategori', 'satuan', 'stok', 'minStok', 'lokasi', 'foto', 'spesifikasi', 'updatedAt'],
   Moves:    ['id', 'waktu', 'itemId', 'jenis', 'qty', 'stokAkhir', 'oleh', 'proyek', 'catatan'],
@@ -38,6 +38,7 @@ function handle_(p) {
       case 'remove': checkPin_(p); return remove_(p.tab, p.id);
       case 'move':   checkPin_(p); return move_(p);
       case 'upload': checkPin_(p); return upload_(p);
+      case 'transfer': checkPin_(p); return transfer_(p);
       case 'seed':   checkPin_(p); return seed_(p.data || {});
       case 'checkPin': checkPin_(p); return { ok: true };
       case 'report':   checkTeamPin_(p); return report_(p);
@@ -64,7 +65,7 @@ function db_() {
 
 function setup_() {
   var cache = CacheService.getScriptCache();
-  if (cache.get('setup-v4')) return;
+  if (cache.get('setup-v5')) return;
   var ss = db_();
   Object.keys(TABS).forEach(function (name) {
     var sh = ss.getSheetByName(name);
@@ -92,7 +93,7 @@ function setup_() {
   }
     var keys = rows_('Config').map(function (r) { return r.key; });
   if (keys.indexOf('PIN_TIM') < 0) cfg.appendRow(['PIN_TIM', '']);
-  cache.put('setup-v4', '1', 21600);
+  cache.put('setup-v5', '1', 21600);
 }
 
 function rows_(name) {
@@ -203,6 +204,40 @@ function unreport_(p) {
     if (nrp !== String(p.nrp)) throw new Error('Hanya bisa menghapus laporan sendiri');
     sh.deleteRow(r);
     return { ok: true };
+  });
+}
+
+/* ---------- Mutasi member: nonaktifkan + pindahkan alokasi & tugas ke pengganti ---------- */
+function transfer_(p) {
+  var from = String(p.from || ''), to = String(p.to || '');
+  if (!from) throw new Error('Member asal belum dipilih');
+  return withLock_(function () {
+    var ss = db_(), ms = ss.getSheetByName('Members'), mh = header_(ms), r = findRow_(ms, from);
+    if (!r) throw new Error('Member tidak ditemukan');
+    ms.getRange(r, mh.indexOf('aktif') + 1).setValue('Tidak');
+    var nP = 0, ps = ss.getSheetByName('Projects'), ph = header_(ps), tc = ph.indexOf('tim') + 1, n = ps.getLastRow();
+    if (n > 1 && tc > 0) {
+      var vals = ps.getRange(2, tc, n - 1, 1).getValues().map(function (v) {
+        var parts = String(v[0]).split(/[,;]/).map(function (x) { return x.trim(); }).filter(String), hit = false, out = {}, order = [];
+        parts.forEach(function (pt) {
+          var a = pt.split(':'), k = a[0].trim(), pct = Number(a[1] || 20);
+          if (k === from) { hit = true; k = to; }
+          if (!k) return;
+          if (out[k] === undefined) { out[k] = 0; order.push(k); }
+          out[k] += pct;
+        });
+        if (!hit) return [v[0]];
+        nP++;
+        return [order.map(function (k) { return k + ':' + out[k]; }).join(', ')];
+      });
+      ps.getRange(2, tc, n - 1, 1).setValues(vals);
+    }
+    var nT = 0, ts = ss.getSheetByName('Tasks'), th = header_(ts), tn = ts.getLastRow();
+    if (to && tn > 1) {
+      var nc = th.indexOf('nrp'), sc = th.indexOf('status'), tv = ts.getRange(2, 1, tn - 1, th.length).getValues();
+      tv.forEach(function (row, i) { if (String(row[nc]) === from && row[sc] !== 'Selesai') { ts.getRange(i + 2, nc + 1).setValue(to); nT++; } });
+    }
+    return { ok: true, projects: nP, tasks: nT };
   });
 }
 
